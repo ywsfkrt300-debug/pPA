@@ -1,0 +1,70 @@
+{
+  "entities": {
+    "Bot": {
+      "title": "Bot",
+      "description": "A Telegram bot configuration",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The user ID of the owner"
+        },
+        "botId": {
+          "type": "string",
+          "description": "The Telegram bot ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the bot"
+        },
+        "username": {
+          "type": "string",
+          "description": "The username of the bot"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the bot was added"
+        }
+      },
+      "required": ["uid", "botId", "name", "username", "createdAt"]
+    },
+    "BotRules": {
+      "title": "BotRules",
+      "description": "The auto-reply rules for a bot",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The user ID of the owner"
+        },
+        "rules": {
+          "type": "array",
+          "description": "List of rules",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "triggerType": { "type": "string", "enum": ["command", "text_match", "any"] },
+              "triggerValue": { "type": "string" },
+              "responseType": { "type": "string", "enum": ["text"] },
+              "responseValue": { "type": "string" }
+            },
+            "required": ["id", "triggerType", "responseType", "responseValue"]
+          }
+        }
+      },
+      "required": ["uid", "rules"]
+    }
+  },
+  "firestore": {
+    "bots/{botId}": {
+      "schema": "Bot",
+      "description": "Stores bot configurations"
+    },
+    "bot_rules/{botId}": {
+      "schema": "BotRules",
+      "description": "Stores auto-reply rules for bots"
+    }
+  }
+}

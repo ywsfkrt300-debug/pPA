@@ -1,0 +1,5 @@
+{
+  "name": "Telegram Bot Webhook Manager",
+  "description": "A platform to easily program and run Telegram bots via webhooks. Connect your bot token and define custom auto-reply rules.",
+  "requestFramePermissions": []
+}
