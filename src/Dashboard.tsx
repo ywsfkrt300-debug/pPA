@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { db } from './firebase';
-import { collection, query, where, onSnapshot, doc, setDoc, getDocs } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, setDoc, getDocs, updateDoc } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
-import { Bot, Plus, LogOut, Settings, ExternalLink, Users } from 'lucide-react';
+import { Bot, Plus, LogOut, Settings, ExternalLink, Users, Play, Pause } from 'lucide-react';
 
 interface BotData {
   uid: string;
@@ -12,6 +12,7 @@ interface BotData {
   username: string;
   createdAt: string;
   token?: string;
+  isActive?: boolean;
 }
 
 export default function Dashboard() {
@@ -70,6 +71,7 @@ export default function Dashboard() {
         name: name,
         username: username,
         token: token,
+        isActive: true,
         createdAt: new Date().toISOString(),
       });
 
@@ -90,6 +92,15 @@ export default function Dashboard() {
       setError(err.message || 'فشل في إضافة البوت. تأكد من صحة التوكن.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const toggleBotStatus = async (bot: BotData) => {
+    try {
+      const newStatus = bot.isActive === false ? true : false;
+      await updateDoc(doc(db, 'bots', bot.botId), { isActive: newStatus });
+    } catch (err) {
+      console.error('Error toggling bot status:', err);
     }
   };
 
@@ -148,19 +159,32 @@ export default function Dashboard() {
             {bots.map((bot) => (
               <div key={bot.botId} className="bg-white overflow-hidden shadow-sm rounded-2xl border border-slate-200 hover:shadow-md transition-shadow">
                 <div className="p-6">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0 bg-indigo-100 rounded-xl p-3">
-                      <Bot className="h-6 w-6 text-indigo-600" />
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <div className={`flex-shrink-0 rounded-xl p-3 ${bot.isActive !== false ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
+                        <Bot className="h-6 w-6" />
+                      </div>
+                      <div className="mr-4 flex-1">
+                        <h3 className="text-lg font-semibold text-slate-900 truncate">{bot.name}</h3>
+                        <p className="text-sm text-slate-500" dir="ltr">@{bot.username}</p>
+                      </div>
                     </div>
-                    <div className="mr-4 flex-1">
-                      <h3 className="text-lg font-semibold text-slate-900 truncate">{bot.name}</h3>
-                      <p className="text-sm text-slate-500" dir="ltr">@{bot.username}</p>
-                    </div>
+                    <button
+                      onClick={() => toggleBotStatus(bot)}
+                      className={`p-2 rounded-full transition-colors ${bot.isActive !== false ? 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100' : 'text-slate-400 bg-slate-50 hover:bg-slate-100'}`}
+                      title={bot.isActive !== false ? 'إيقاف البوت' : 'تشغيل البوت'}
+                    >
+                      {bot.isActive !== false ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+                    </button>
                   </div>
                   
                   <div className="mt-4 flex items-center text-sm text-slate-500 bg-slate-50 rounded-lg p-2">
                     <Users className="h-4 w-4 ml-2 text-indigo-500" />
                     <span>{bot.userCount || 0} مستخدم نشط</span>
+                    <span className="mx-2 text-slate-300">|</span>
+                    <span className={`font-medium ${bot.isActive !== false ? 'text-emerald-600' : 'text-slate-500'}`}>
+                      {bot.isActive !== false ? 'يعمل' : 'متوقف'}
+                    </span>
                   </div>
 
                   <div className="mt-6 flex space-x-3 space-x-reverse">

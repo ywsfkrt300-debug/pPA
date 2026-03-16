@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import { db } from './firebase';
 import { doc, onSnapshot, updateDoc, getDoc, collection, getDocs } from 'firebase/firestore';
-import { ArrowRight, Plus, Save, Trash2, Bot, MessageSquare, Image as ImageIcon, Users } from 'lucide-react';
+import { ArrowRight, Plus, Save, Trash2, Bot, MessageSquare, Image as ImageIcon, Users, Settings } from 'lucide-react';
 
 interface Rule {
   id: string;
@@ -19,12 +19,18 @@ export default function BotEditor() {
   const { user } = useAuth();
   const [botName, setBotName] = useState('');
   const [botUsername, setBotUsername] = useState('');
+  const [botToken, setBotToken] = useState('');
+  const [isActive, setIsActive] = useState(true);
+  const [description, setDescription] = useState('');
+  const [shortDescription, setShortDescription] = useState('');
+  
   const [rules, setRules] = useState<Rule[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [userCount, setUserCount] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingImageId, setUploadingImageId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'rules' | 'settings'>('rules');
 
   useEffect(() => {
     if (!botId || !user) return;
@@ -32,8 +38,13 @@ export default function BotEditor() {
     // Fetch bot details
     getDoc(doc(db, 'bots', botId)).then((docSnap) => {
       if (docSnap.exists() && docSnap.data().uid === user.uid) {
-        setBotName(docSnap.data().name);
-        setBotUsername(docSnap.data().username);
+        const data = docSnap.data();
+        setBotName(data.name || '');
+        setBotUsername(data.username || '');
+        setBotToken(data.token || '');
+        setIsActive(data.isActive !== false);
+        setDescription(data.description || '');
+        setShortDescription(data.shortDescription || '');
       }
     });
 
@@ -76,9 +87,38 @@ export default function BotEditor() {
     setSaving(true);
     setError('');
     try {
-      await updateDoc(doc(db, 'bot_rules', botId), {
-        rules: rules,
-      });
+      if (activeTab === 'rules') {
+        await updateDoc(doc(db, 'bot_rules', botId), {
+          rules: rules,
+        });
+      } else {
+        // Save settings to Firestore
+        await updateDoc(doc(db, 'bots', botId), {
+          name: botName,
+          description: description,
+          shortDescription: shortDescription,
+          isActive: isActive
+        });
+
+        // Update Telegram API
+        if (botToken) {
+          await fetch(`https://api.telegram.org/bot${botToken}/setMyName`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: botName })
+          });
+          await fetch(`https://api.telegram.org/bot${botToken}/setMyDescription`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ description: description })
+          });
+          await fetch(`https://api.telegram.org/bot${botToken}/setMyShortDescription`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ short_description: shortDescription })
+          });
+        }
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -151,7 +191,7 @@ export default function BotEditor() {
                 className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors shadow-sm font-medium text-sm disabled:opacity-50"
               >
                 <Save className="h-4 w-4 ml-2" />
-                {saving ? 'جاري الحفظ...' : 'حفظ القواعد'}
+                {saving ? 'جاري الحفظ...' : (activeTab === 'rules' ? 'حفظ القواعد' : 'حفظ الإعدادات')}
               </button>
             </div>
           </div>
@@ -165,20 +205,97 @@ export default function BotEditor() {
           </div>
         )}
 
-        <div className="bg-white shadow-sm rounded-2xl border border-slate-200 overflow-hidden">
-          <div className="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+        <div className="flex border-b border-slate-200 mb-6">
+          <button 
+            className={`px-6 py-3 font-medium text-sm ${activeTab === 'rules' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`} 
+            onClick={() => setActiveTab('rules')}
+          >
+            القواعد والردود
+          </button>
+          <button 
+            className={`px-6 py-3 font-medium text-sm ${activeTab === 'settings' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`} 
+            onClick={() => setActiveTab('settings')}
+          >
+            إعدادات البوت
+          </button>
+        </div>
+
+        {activeTab === 'settings' ? (
+          <div className="bg-white shadow-sm rounded-2xl border border-slate-200 overflow-hidden p-6 space-y-6">
             <div>
-              <h2 className="text-lg font-semibold text-slate-900">قواعد الرد التلقائي</h2>
-              <p className="text-sm text-slate-500">حدد كيف سيرد البوت على الرسائل.</p>
+              <h2 className="text-lg font-semibold text-slate-900 mb-4">المعلومات الأساسية</h2>
+              
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
+                  <div>
+                    <h3 className="font-medium text-slate-900">حالة البوت</h3>
+                    <p className="text-sm text-slate-500">إيقاف أو تشغيل الرد التلقائي للبوت</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" className="sr-only peer" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
+                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                  </label>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">اسم البوت</label>
+                  <input
+                    type="text"
+                    value={botName}
+                    onChange={(e) => setBotName(e.target.value)}
+                    className="w-full border border-slate-300 rounded-xl shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">وصف قصير (About)</label>
+                  <p className="text-xs text-slate-500 mb-2">يظهر في صفحة البوت قبل بدء المحادثة.</p>
+                  <textarea
+                    value={shortDescription}
+                    onChange={(e) => setShortDescription(e.target.value)}
+                    rows={2}
+                    className="w-full border border-slate-300 rounded-xl shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">الوصف الكامل (Description)</label>
+                  <p className="text-xs text-slate-500 mb-2">يظهر عندما يفتح شخص ما المحادثة لأول مرة.</p>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={4}
+                    className="w-full border border-slate-300 rounded-xl shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  />
+                </div>
+                
+                <div className="mt-6 p-4 bg-indigo-50 rounded-xl border border-indigo-100 flex items-start">
+                  <ImageIcon className="h-5 w-5 text-indigo-600 ml-3 mt-0.5" />
+                  <div>
+                    <h4 className="text-sm font-medium text-indigo-900">تغيير صورة البوت</h4>
+                    <p className="text-sm text-indigo-700 mt-1">
+                      لتغيير الصورة الشخصية للبوت، يجب عليك التوجه إلى <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" className="font-bold underline">@BotFather</a> في تيليجرام، وإرسال الأمر <code>/setuserpic</code> ثم اختيار البوت الخاص بك وإرسال الصورة الجديدة.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
-            <button
-              onClick={handleAddRule}
-              className="flex items-center px-3 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors shadow-sm text-sm font-medium"
-            >
-              <Plus className="h-4 w-4 ml-1" />
-              إضافة قاعدة
-            </button>
           </div>
+        ) : (
+          <div className="bg-white shadow-sm rounded-2xl border border-slate-200 overflow-hidden">
+            <div className="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">قواعد الرد التلقائي</h2>
+                <p className="text-sm text-slate-500">حدد كيف سيرد البوت على الرسائل.</p>
+              </div>
+              <button
+                onClick={handleAddRule}
+                className="flex items-center px-3 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors shadow-sm text-sm font-medium"
+              >
+                <Plus className="h-4 w-4 ml-1" />
+                إضافة قاعدة
+              </button>
+            </div>
 
           <div className="p-6 space-y-6">
             {rules.length === 0 ? (
@@ -290,6 +407,7 @@ export default function BotEditor() {
             )}
           </div>
         </div>
+        )}
       </main>
     </div>
   );

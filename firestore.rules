@@ -7,7 +7,7 @@ service cloud.firestore {
     }
     
     function isValidBot() {
-      return hasOnlyAllowedFields(['uid', 'botId', 'name', 'username', 'createdAt', 'token']) &&
+      return request.resource.data.keys().hasOnly(['uid', 'botId', 'name', 'username', 'createdAt', 'token', 'isActive', 'description', 'shortDescription']) &&
              request.resource.data.uid is string &&
              request.resource.data.botId is string &&
              request.resource.data.name is string &&

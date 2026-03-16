@@ -140,7 +140,7 @@ async function startServer() {
     
     snapshot.docs.forEach(doc => {
       const data = doc.data();
-      if (data.token) {
+      if (data.token && data.isActive !== false) {
         currentBotIds.add(data.botId);
         startPolling(data.botId, data.token);
       }
