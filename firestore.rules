@@ -7,12 +7,13 @@ service cloud.firestore {
     }
     
     function isValidBot() {
-      return hasOnlyAllowedFields(['uid', 'botId', 'name', 'username', 'createdAt']) &&
+      return hasOnlyAllowedFields(['uid', 'botId', 'name', 'username', 'createdAt', 'token']) &&
              request.resource.data.uid is string &&
              request.resource.data.botId is string &&
              request.resource.data.name is string &&
              request.resource.data.username is string &&
-             request.resource.data.createdAt is string;
+             request.resource.data.createdAt is string &&
+             request.resource.data.token is string;
     }
     
     function isValidBotRules() {

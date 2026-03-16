@@ -38,38 +38,46 @@ export default function Dashboard() {
     setError('');
 
     try {
-      const res = await fetch('/api/register-bot', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to register bot');
+      // 1. Verify token with Telegram directly from frontend
+      const tgRes = await fetch(`https://api.telegram.org/bot${token}/getMe`);
+      const tgData = await tgRes.json();
+      
+      if (!tgData.ok) {
+        throw new Error('Invalid Telegram token. Please check and try again.');
       }
 
-      // Save to Firestore
-      const botRef = doc(db, 'bots', data.botId);
+      const botId = tgData.result.id.toString();
+      const username = tgData.result.username;
+      const name = tgData.result.first_name;
+
+      // 2. Save to Firestore
+      const botRef = doc(db, 'bots', botId);
       await setDoc(botRef, {
         uid: user.uid,
-        botId: data.botId,
-        name: data.name,
-        username: data.username,
+        botId: botId,
+        name: name,
+        username: username,
+        token: token,
         createdAt: new Date().toISOString(),
       });
 
-      // Initialize rules
-      const rulesRef = doc(db, 'bot_rules', data.botId);
+      // 3. Initialize rules
+      const rulesRef = doc(db, 'bot_rules', botId);
       await setDoc(rulesRef, {
         uid: user.uid,
         rules: [],
       }, { merge: true });
 
+      // 4. Try to set Webhook (Points to the current domain)
+      const currentHost = window.location.origin;
+      const webhookUrl = `${currentHost}/api/webhook/${botId}`;
+      await fetch(`https://api.telegram.org/bot${token}/setWebhook?url=${webhookUrl}`);
+
       setShowAddModal(false);
       setToken('');
     } catch (err: any) {
-      setError(err.message);
+      console.error(err);
+      setError(err.message || 'Failed to add bot. Make sure the token is correct.');
     } finally {
       setLoading(false);
     }
@@ -164,14 +172,10 @@ export default function Dashboard() {
       </main>
 
       {showAddModal && (
-        <div className="fixed inset-0 z-10 overflow-y-auto">
-          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-              <div className="absolute inset-0 bg-slate-900 opacity-75"></div>
-            </div>
-            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-            <div className="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-              <form onSubmit={handleAddBot}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/75 transition-opacity" onClick={() => setShowAddModal(false)}></div>
+          <div className="relative bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all w-full max-w-lg">
+            <form onSubmit={handleAddBot}>
                 <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                   <h3 className="text-lg leading-6 font-medium text-slate-900 mb-4">Add new Telegram Bot</h3>
                   <p className="text-sm text-slate-500 mb-4">
@@ -209,7 +213,6 @@ export default function Dashboard() {
                 </div>
               </form>
             </div>
-          </div>
         </div>
       )}
     </div>
