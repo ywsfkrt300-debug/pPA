@@ -14,20 +14,66 @@ const activeBots = new Map<string, { token: string, lastUpdateId: number, active
 
 async function processUpdate(botId: string, token: string, update: any) {
   try {
-    // Track user statistics
+    let isBanned = false;
+    let messageCount = 0;
+    let maxMessages = 0;
+
+    // Fetch bot settings for max messages
+    const botDoc = await getDoc(doc(db, 'bots', botId));
+    if (botDoc.exists()) {
+      maxMessages = botDoc.data().maxMessages || 0;
+    }
+
+    // Track user statistics and check ban/limits
     if (update.message && update.message.from) {
       const userId = update.message.from.id.toString();
       const userRef = doc(db, `bots/${botId}/users`, userId);
-      getDoc(userRef).then((userDoc) => {
-        if (!userDoc.exists()) {
-          setDoc(userRef, {
-            id: userId,
+      const userDoc = await getDoc(userRef);
+      
+      if (!userDoc.exists()) {
+        await setDoc(userRef, {
+          id: userId,
+          username: update.message.from.username || '',
+          firstName: update.message.from.first_name || '',
+          lastSeen: new Date().toISOString(),
+          messageCount: 1,
+          isBanned: false
+        }, { merge: true });
+        messageCount = 1;
+      } else {
+        const userData = userDoc.data();
+        isBanned = userData.isBanned === true;
+        messageCount = (userData.messageCount || 0) + 1;
+        
+        if (!isBanned) {
+          await setDoc(userRef, {
             username: update.message.from.username || '',
             firstName: update.message.from.first_name || '',
-            lastSeen: new Date().toISOString()
-          }, { merge: true }).catch(console.error);
+            lastSeen: new Date().toISOString(),
+            messageCount: messageCount
+          }, { merge: true });
         }
-      });
+      }
+    }
+
+    // If user is banned, ignore the message
+    if (isBanned) {
+      return;
+    }
+
+    // If user exceeded message limit, send a warning and ignore
+    if (maxMessages > 0 && messageCount > maxMessages) {
+      if (update.message && update.message.chat) {
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: update.message.chat.id,
+            text: 'عذراً، لقد تجاوزت الحد الأقصى للرسائل المسموح بها في هذا البوت.'
+          })
+        });
+      }
+      return;
     }
 
     const rulesDoc = await getDoc(doc(db, 'bot_rules', botId));

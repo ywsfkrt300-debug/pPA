@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext';
 import { db } from './firebase';
 import { doc, onSnapshot, updateDoc, getDoc, collection, getDocs } from 'firebase/firestore';
 import { ArrowRight, Plus, Save, Trash2, Bot, MessageSquare, Image as ImageIcon, Users, Settings } from 'lucide-react';
+import UsersList from './UsersList';
 
 interface Rule {
   id: string;
@@ -23,6 +24,7 @@ export default function BotEditor() {
   const [isActive, setIsActive] = useState(true);
   const [description, setDescription] = useState('');
   const [shortDescription, setShortDescription] = useState('');
+  const [maxMessages, setMaxMessages] = useState<number>(0);
   
   const [rules, setRules] = useState<Rule[]>([]);
   const [saving, setSaving] = useState(false);
@@ -30,7 +32,7 @@ export default function BotEditor() {
   const [userCount, setUserCount] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingImageId, setUploadingImageId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'rules' | 'settings'>('rules');
+  const [activeTab, setActiveTab] = useState<'rules' | 'settings' | 'users'>('rules');
 
   useEffect(() => {
     if (!botId || !user) return;
@@ -45,6 +47,7 @@ export default function BotEditor() {
         setIsActive(data.isActive !== false);
         setDescription(data.description || '');
         setShortDescription(data.shortDescription || '');
+        setMaxMessages(data.maxMessages || 0);
       }
     });
 
@@ -91,13 +94,14 @@ export default function BotEditor() {
         await updateDoc(doc(db, 'bot_rules', botId), {
           rules: rules,
         });
-      } else {
+      } else if (activeTab === 'settings') {
         // Save settings to Firestore
         await updateDoc(doc(db, 'bots', botId), {
           name: botName,
           description: description,
           shortDescription: shortDescription,
-          isActive: isActive
+          isActive: isActive,
+          maxMessages: maxMessages
         });
 
         // Update Telegram API
@@ -213,6 +217,12 @@ export default function BotEditor() {
             القواعد والردود
           </button>
           <button 
+            className={`px-6 py-3 font-medium text-sm ${activeTab === 'users' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`} 
+            onClick={() => setActiveTab('users')}
+          >
+            المستخدمين
+          </button>
+          <button 
             className={`px-6 py-3 font-medium text-sm ${activeTab === 'settings' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`} 
             onClick={() => setActiveTab('settings')}
           >
@@ -235,6 +245,18 @@ export default function BotEditor() {
                     <input type="checkbox" className="sr-only peer" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
                     <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                   </label>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">الحد الأقصى للرسائل لكل مستخدم</label>
+                  <p className="text-xs text-slate-500 mb-2">ضع 0 لعدد لا نهائي من الرسائل.</p>
+                  <input
+                    type="number"
+                    min="0"
+                    value={maxMessages}
+                    onChange={(e) => setMaxMessages(parseInt(e.target.value) || 0)}
+                    className="w-full border border-slate-300 rounded-xl shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  />
                 </div>
 
                 <div>
@@ -281,7 +303,7 @@ export default function BotEditor() {
               </div>
             </div>
           </div>
-        ) : (
+        ) : activeTab === 'rules' ? (
           <div className="bg-white shadow-sm rounded-2xl border border-slate-200 overflow-hidden">
             <div className="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50">
               <div>
@@ -407,7 +429,17 @@ export default function BotEditor() {
             )}
           </div>
         </div>
-        )}
+        ) : activeTab === 'users' ? (
+          <div className="bg-white shadow-sm rounded-2xl border border-slate-200 overflow-hidden">
+            <div className="p-6 border-b border-slate-200 bg-slate-50">
+              <h2 className="text-lg font-semibold text-slate-900">مستخدمي البوت</h2>
+              <p className="text-sm text-slate-500">قائمة بالأشخاص الذين تواصلوا مع البوت.</p>
+            </div>
+            <div className="p-0">
+              <UsersList botId={botId!} />
+            </div>
+          </div>
+        ) : null}
       </main>
     </div>
   );
