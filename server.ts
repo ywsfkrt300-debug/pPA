@@ -2,7 +2,7 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, getDoc } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 import fs from 'fs';
 
 // Read firebase config
@@ -62,6 +62,23 @@ async function startServer() {
 
     // Telegram expects a 200 OK quickly. We can also reply directly in the response.
     try {
+      // Track user statistics
+      if (update.message && update.message.from) {
+        const userId = update.message.from.id.toString();
+        // Fire and forget user tracking
+        const userRef = doc(db, `bots/${botId}/users`, userId);
+        getDoc(userRef).then((userDoc) => {
+          if (!userDoc.exists()) {
+            setDoc(userRef, {
+              id: userId,
+              username: update.message.from.username || '',
+              firstName: update.message.from.first_name || '',
+              lastSeen: new Date().toISOString()
+            }, { merge: true }).catch(console.error);
+          }
+        });
+      }
+
       const rulesDoc = await getDoc(doc(db, 'bot_rules', botId));
       if (!rulesDoc.exists()) {
         return res.status(200).send('OK'); // No rules, ignore
@@ -78,27 +95,41 @@ async function startServer() {
         const chatId = update.message.chat.id;
 
         // Find matching rule
-        let matchedResponse = null;
+        let matchedRule = null;
         for (const rule of rules) {
           if (rule.triggerType === 'command' && text.startsWith(rule.triggerValue)) {
-            matchedResponse = rule.responseValue;
+            matchedRule = rule;
             break;
           } else if (rule.triggerType === 'text_match' && text.includes(rule.triggerValue)) {
-            matchedResponse = rule.responseValue;
+            matchedRule = rule;
+            break;
+          } else if (rule.triggerType === 'exact_match' && text === rule.triggerValue) {
+            matchedRule = rule;
             break;
           } else if (rule.triggerType === 'any') {
-            matchedResponse = rule.responseValue;
+            matchedRule = rule;
             break;
           }
         }
 
-        if (matchedResponse) {
+        if (matchedRule) {
           // Reply via webhook response!
-          return res.status(200).json({
-            method: 'sendMessage',
-            chat_id: chatId,
-            text: matchedResponse
-          });
+          if (matchedRule.responseType === 'image' && matchedRule.imageUrl) {
+            // Send photo
+            return res.status(200).json({
+              method: 'sendPhoto',
+              chat_id: chatId,
+              photo: matchedRule.imageUrl,
+              caption: matchedRule.responseValue || ''
+            });
+          } else {
+            // Send text
+            return res.status(200).json({
+              method: 'sendMessage',
+              chat_id: chatId,
+              text: matchedRule.responseValue || ''
+            });
+          }
         }
       }
 

@@ -28,6 +28,11 @@ service cloud.firestore {
       allow create: if isValidBot();
       allow update: if isValidBot();
       allow delete: if true;
+      
+      match /users/{userId} {
+        allow read: if true;
+        allow write: if true; // Webhook needs to write here without auth
+      }
     }
 
     match /bot_rules/{botId} {
