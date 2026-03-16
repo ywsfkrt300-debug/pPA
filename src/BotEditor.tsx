@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import { db } from './firebase';
 import { doc, onSnapshot, updateDoc, getDoc, collection, getDocs } from 'firebase/firestore';
-import { ArrowRight, Plus, Save, Trash2, Bot, MessageSquare, Image as ImageIcon, Users, Settings } from 'lucide-react';
+import { ArrowRight, Plus, Save, Trash2, Bot, MessageSquare, Image as ImageIcon, Users, Settings, Send, X } from 'lucide-react';
 import UsersList from './UsersList';
 
 interface Rule {
@@ -32,7 +32,9 @@ export default function BotEditor() {
   const [userCount, setUserCount] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingImageId, setUploadingImageId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'rules' | 'settings' | 'users'>('rules');
+  const [activeTab, setActiveTab] = useState<'rules' | 'settings' | 'users' | 'broadcast'>('rules');
+  const [broadcastMessage, setBroadcastMessage] = useState('');
+  const [broadcasting, setBroadcasting] = useState(false);
 
   useEffect(() => {
     if (!botId || !user) return;
@@ -77,6 +79,35 @@ export default function BotEditor() {
     setRules([...rules, newRule]);
   };
 
+  const handleBroadcast = async () => {
+    if (!botId || !broadcastMessage.trim()) return;
+    
+    setBroadcasting(true);
+    try {
+      const res = await fetch('/api/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          botId,
+          message: broadcastMessage
+        })
+      });
+      
+      const data = await res.json();
+      if (res.ok) {
+        alert(`تم الإرسال بنجاح! تم الوصول إلى ${data.success} مستخدم، وفشل الإرسال لـ ${data.failed} مستخدم.`);
+        setBroadcastMessage('');
+      } else {
+        alert(`فشل الإرسال: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Error broadcasting:', error);
+      alert('حدث خطأ أثناء إرسال الإذاعة.');
+    } finally {
+      setBroadcasting(false);
+    }
+  };
+
   const handleUpdateRule = (id: string, updates: Partial<Rule>) => {
     setRules(rules.map((r) => (r.id === id ? { ...r, ...updates } : r)));
   };
@@ -87,6 +118,7 @@ export default function BotEditor() {
 
   const handleSave = async () => {
     if (!botId || !user) return;
+    if (activeTab === 'broadcast') return; // Broadcast has its own send logic
     setSaving(true);
     setError('');
     try {
@@ -227,6 +259,12 @@ export default function BotEditor() {
             onClick={() => setActiveTab('settings')}
           >
             إعدادات البوت
+          </button>
+          <button 
+            className={`px-6 py-3 font-medium text-sm ${activeTab === 'broadcast' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`} 
+            onClick={() => setActiveTab('broadcast')}
+          >
+            إذاعة (Broadcast)
           </button>
         </div>
 
@@ -437,6 +475,55 @@ export default function BotEditor() {
             </div>
             <div className="p-0">
               <UsersList botId={botId!} />
+            </div>
+          </div>
+        ) : activeTab === 'broadcast' ? (
+          <div className="bg-white shadow-sm rounded-2xl border border-slate-200 overflow-hidden">
+            <div className="p-6 border-b border-slate-200 bg-slate-50">
+              <h2 className="text-lg font-semibold text-slate-900">إذاعة رسالة (Broadcast)</h2>
+              <p className="text-sm text-slate-500">إرسال رسالة لجميع مستخدمي البوت دفعة واحدة.</p>
+            </div>
+            <div className="p-6 space-y-6">
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start">
+                <div className="bg-amber-100 p-2 rounded-lg ml-3">
+                  <Save className="h-5 w-5 text-amber-600" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-amber-900">تنبيه الإذاعة</h4>
+                  <p className="text-xs text-amber-800 mt-1">
+                    سيتم إرسال هذه الرسالة إلى جميع المستخدمين الذين تفاعلوا مع البوت سابقاً. يرجى استخدام هذه الميزة بحذر لتجنب إزعاج المستخدمين.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-semibold text-slate-700">محتوى الرسالة:</label>
+                <textarea
+                  value={broadcastMessage}
+                  onChange={(e) => setBroadcastMessage(e.target.value)}
+                  placeholder="اكتب الرسالة التي تريد إرسالها للجميع..."
+                  rows={6}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+
+              <button
+                onClick={handleBroadcast}
+                disabled={broadcasting || !broadcastMessage.trim()}
+                className="w-full flex items-center justify-center px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors shadow-sm font-bold disabled:opacity-50"
+              >
+                {broadcasting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white ml-2"></div>
+                    جاري الإرسال للجميع...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-5 w-5 ml-2" />
+                    بدء الإذاعة الآن
+                  </>
+                )}
+              </button>
             </div>
           </div>
         ) : null}

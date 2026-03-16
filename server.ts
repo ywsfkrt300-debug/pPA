@@ -2,7 +2,7 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, setDoc, collection, onSnapshot } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, setDoc, collection, onSnapshot, getDocs } from 'firebase/firestore';
 import fs from 'fs';
 
 // Read firebase config
@@ -219,6 +219,74 @@ async function startServer() {
       res.json({ botId, username, name });
     } catch (error) {
       console.error('Error registering bot:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // API Route: Send Broadcast Message
+  app.post('/api/broadcast', async (req, res) => {
+    const { botId, message } = req.body;
+    if (!botId || !message) return res.status(400).json({ error: 'Bot ID and message are required' });
+
+    const bot = activeBots.get(botId);
+    if (!bot) return res.status(404).json({ error: 'Bot is not active or not found' });
+
+    try {
+      const usersSnapshot = await getDocs(collection(db, `bots/${botId}/users`));
+      const results = { success: 0, failed: 0 };
+
+      for (const userDoc of usersSnapshot.docs) {
+        const userId = userDoc.id;
+        try {
+          const tgRes = await fetch(`https://api.telegram.org/bot${bot.token}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: userId,
+              text: message
+            })
+          });
+          const tgData = await tgRes.json();
+          if (tgData.ok) results.success++;
+          else results.failed++;
+        } catch (err) {
+          results.failed++;
+        }
+      }
+
+      res.json(results);
+    } catch (error) {
+      console.error('Error sending broadcast:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // API Route: Send Direct Message
+  app.post('/api/send-message', async (req, res) => {
+    const { botId, userId, message } = req.body;
+    if (!botId || !userId || !message) return res.status(400).json({ error: 'Bot ID, User ID and message are required' });
+
+    const bot = activeBots.get(botId);
+    if (!bot) return res.status(404).json({ error: 'Bot is not active or not found' });
+
+    try {
+      const tgRes = await fetch(`https://api.telegram.org/bot${bot.token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: userId,
+          text: message
+        })
+      });
+      const tgData = await tgRes.json();
+      
+      if (tgData.ok) {
+        res.json({ success: true });
+      } else {
+        res.status(400).json({ error: tgData.description || 'Failed to send message' });
+      }
+    } catch (error) {
+      console.error('Error sending direct message:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
