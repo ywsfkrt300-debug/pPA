@@ -5,29 +5,34 @@
       "description": "A Telegram bot configuration",
       "type": "object",
       "properties": {
-        "uid": {
-          "type": "string",
-          "description": "The user ID of the owner"
-        },
-        "botId": {
-          "type": "string",
-          "description": "The Telegram bot ID"
-        },
-        "name": {
-          "type": "string",
-          "description": "The name of the bot"
-        },
-        "username": {
-          "type": "string",
-          "description": "The username of the bot"
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time",
-          "description": "When the bot was added"
-        }
+        "uid": { "type": "string" },
+        "botId": { "type": "string" },
+        "name": { "type": "string" },
+        "username": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "token": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "description": { "type": "string" },
+        "shortDescription": { "type": "string" },
+        "maxMessages": { "type": "number" },
+        "password": { "type": "string" }
       },
-      "required": ["uid", "botId", "name", "username", "createdAt"]
+      "required": ["uid", "botId", "name", "username", "createdAt", "token"]
+    },
+    "BotUser": {
+      "title": "BotUser",
+      "description": "A user who interacted with the bot",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "firstName": { "type": "string" },
+        "username": { "type": "string" },
+        "lastSeen": { "type": "string", "format": "date-time" },
+        "messageCount": { "type": "number" },
+        "isBanned": { "type": "boolean" },
+        "isUnlocked": { "type": "boolean" }
+      },
+      "required": ["id"]
     },
     "BotRules": {
       "title": "BotRules",

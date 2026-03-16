@@ -1,45 +1,85 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper functions
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+             (request.auth.token.email == "ywsfkrt300@gmail.com" && request.auth.token.email_verified == true);
+    }
+
     function hasOnlyAllowedFields(allowedFields) {
       return request.resource.data.keys().hasOnly(allowedFields);
     }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
     
-    function isValidBot() {
-      return request.resource.data.keys().hasOnly(['uid', 'botId', 'name', 'username', 'createdAt', 'token', 'isActive', 'description', 'shortDescription']) &&
-             request.resource.data.uid is string &&
-             request.resource.data.botId is string &&
-             request.resource.data.name is string &&
-             request.resource.data.username is string &&
-             request.resource.data.createdAt is string &&
-             request.resource.data.token is string;
+    function isValidBot(data) {
+      let allowed = ['uid', 'botId', 'name', 'username', 'createdAt', 'token', 'isActive', 'description', 'shortDescription', 'maxMessages', 'password'];
+      return data.keys().hasOnly(allowed) &&
+             data.uid is string &&
+             data.botId is string &&
+             data.name is string &&
+             data.username is string &&
+             data.createdAt is string &&
+             data.token is string &&
+             (!('isActive' in data) || data.isActive is bool) &&
+             (!('description' in data) || data.description is string) &&
+             (!('shortDescription' in data) || data.shortDescription is string) &&
+             (!('maxMessages' in data) || data.maxMessages is number) &&
+             (!('password' in data) || data.password is string);
     }
     
-    function isValidBotRules() {
-      return hasOnlyAllowedFields(['uid', 'rules']) &&
-             request.resource.data.uid is string &&
-             request.resource.data.rules is list &&
-             request.resource.data.rules.size() <= 100;
+    function isValidBotRules(data) {
+      return data.keys().hasOnly(['uid', 'rules']) &&
+             data.uid is string &&
+             data.rules is list;
     }
 
+    function isValidUser(data) {
+      let allowed = ['id', 'firstName', 'username', 'lastSeen', 'messageCount', 'isBanned', 'isUnlocked'];
+      return data.keys().hasOnly(allowed) &&
+             data.id is string &&
+             (!('firstName' in data) || data.firstName is string) &&
+             (!('username' in data) || data.username is string) &&
+             (!('lastSeen' in data) || data.lastSeen is string) &&
+             (!('messageCount' in data) || data.messageCount is number) &&
+             (!('isBanned' in data) || data.isBanned is bool) &&
+             (!('isUnlocked' in data) || data.isUnlocked is bool);
+    }
+
+    // ===============================================================
+    // Match Rules
+    // ===============================================================
+
     match /bots/{botId} {
-      allow read: if true;
-      allow create: if isValidBot();
-      allow update: if isValidBot();
-      allow delete: if true;
+      allow read: if true; // Publicly readable for the bot to check settings
+      allow create: if isAuthenticated() && isValidBot(request.resource.data) && isOwner(request.resource.data.uid);
+      allow update: if isAuthenticated() && isValidBot(request.resource.data) && isOwner(resource.data.uid);
+      allow delete: if isAuthenticated() && isOwner(resource.data.uid);
       
       match /users/{userId} {
-        allow read: if true;
-        allow write: if true; // Webhook needs to write here without auth
+        allow read: if isAuthenticated() && isOwner(get(/databases/$(database)/documents/bots/$(botId)).data.uid);
+        allow write: if true; // Webhook/Server needs to write here. In a real app, we'd restrict this to server only.
       }
     }
 
     match /bot_rules/{botId} {
       allow read: if true;
-      allow create: if isValidBotRules();
-      allow update: if isValidBotRules();
-      allow delete: if true;
+      allow create: if isAuthenticated() && isValidBotRules(request.resource.data) && isOwner(request.resource.data.uid);
+      allow update: if isAuthenticated() && isValidBotRules(request.resource.data) && isOwner(resource.data.uid);
+      allow delete: if isAuthenticated() && isOwner(resource.data.uid);
     }
   }
 }
