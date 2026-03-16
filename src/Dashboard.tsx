@@ -80,10 +80,8 @@ export default function Dashboard() {
         rules: [],
       }, { merge: true });
 
-      // 4. Try to set Webhook (Points to the current domain)
-      const currentHost = window.location.origin;
-      const webhookUrl = `${currentHost}/api/webhook/${botId}`;
-      await fetch(`https://api.telegram.org/bot${token}/setWebhook?url=${webhookUrl}`);
+      // 4. Delete Webhook (so long polling works)
+      await fetch(`https://api.telegram.org/bot${token}/deleteWebhook`);
 
       setShowAddModal(false);
       setToken('');
