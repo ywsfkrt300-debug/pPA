@@ -1,9 +1,14 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import { auth, googleProvider } from './firebase';
+
+interface MockUser {
+  uid: string;
+  displayName: string | null;
+  email: string | null;
+  photoURL: string | null;
+}
 
 interface AuthContextType {
-  user: User | null;
+  user: MockUser | null;
   loading: boolean;
   login: () => Promise<void>;
   logout: () => Promise<void>;
@@ -12,32 +17,32 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<MockUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
-      setLoading(false);
+    // Generate or retrieve a persistent mock user ID
+    let mockUid = localStorage.getItem('mock_uid');
+    if (!mockUid) {
+      mockUid = 'user_' + Math.random().toString(36).substring(2, 15);
+      localStorage.setItem('mock_uid', mockUid);
+    }
+    
+    setUser({
+      uid: mockUid,
+      displayName: 'Guest User',
+      email: 'guest@example.com',
+      photoURL: 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + mockUid,
     });
-    return unsubscribe;
+    setLoading(false);
   }, []);
 
   const login = async () => {
-    try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (error) {
-      console.error('Login error:', error);
-      throw error;
-    }
+    // No-op since we are always logged in
   };
 
   const logout = async () => {
-    try {
-      await signOut(auth);
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
+    // No-op
   };
 
   return (

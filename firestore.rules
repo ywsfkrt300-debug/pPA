@@ -2,10 +2,6 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     // Helper functions
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-    
     function hasOnlyAllowedFields(allowedFields) {
       return request.resource.data.keys().hasOnly(allowedFields);
     }
@@ -27,18 +23,17 @@ service cloud.firestore {
     }
 
     match /bots/{botId} {
-      allow read: if isAuthenticated() && resource.data.uid == request.auth.uid;
-      allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid && isValidBot();
-      allow update: if isAuthenticated() && resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid && isValidBot();
-      allow delete: if isAuthenticated() && resource.data.uid == request.auth.uid;
+      allow read: if true;
+      allow create: if isValidBot();
+      allow update: if isValidBot();
+      allow delete: if true;
     }
 
     match /bot_rules/{botId} {
-      // Server needs to read rules unauthenticated to process webhooks
       allow read: if true;
-      allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid && isValidBotRules();
-      allow update: if isAuthenticated() && resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid && isValidBotRules();
-      allow delete: if isAuthenticated() && resource.data.uid == request.auth.uid;
+      allow create: if isValidBotRules();
+      allow update: if isValidBotRules();
+      allow delete: if true;
     }
   }
 }
