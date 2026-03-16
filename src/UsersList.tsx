@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from './firebase';
 import { collection, onSnapshot, doc, updateDoc } from 'firebase/firestore';
-import { Ban, CheckCircle, MessageSquare, Clock, Users, Send, X } from 'lucide-react';
+import { Ban, CheckCircle, MessageSquare, Clock, Users, Send, X, Lock, Unlock } from 'lucide-react';
 
 interface BotUser {
   id: string;
@@ -10,6 +10,7 @@ interface BotUser {
   lastSeen: string;
   messageCount: number;
   isBanned?: boolean;
+  isUnlocked?: boolean;
 }
 
 export default function UsersList({ botId }: { botId: string }) {
@@ -44,6 +45,17 @@ export default function UsersList({ botId }: { botId: string }) {
     } catch (error) {
       console.error('Error updating ban status:', error);
       alert('حدث خطأ أثناء تحديث حالة المستخدم.');
+    }
+  };
+
+  const toggleUnlockStatus = async (userId: string, currentStatus: boolean) => {
+    try {
+      await updateDoc(doc(db, `bots/${botId}/users`, userId), {
+        isUnlocked: !currentStatus
+      });
+    } catch (error) {
+      console.error('Error updating unlock status:', error);
+      alert('حدث خطأ أثناء تحديث حالة القفل.');
     }
   };
 
@@ -160,6 +172,26 @@ export default function UsersList({ botId }: { botId: string }) {
                   >
                     <Send className="h-3.5 w-3.5 ml-1" />
                     مراسلة
+                  </button>
+                  <button
+                    onClick={() => toggleUnlockStatus(user.id, !!user.isUnlocked)}
+                    className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      user.isUnlocked 
+                        ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' 
+                        : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                    }`}
+                  >
+                    {user.isUnlocked ? (
+                      <>
+                        <Lock className="h-3.5 w-3.5 ml-1" />
+                        قفل
+                      </>
+                    ) : (
+                      <>
+                        <Unlock className="h-3.5 w-3.5 ml-1" />
+                        إلغاء قفل
+                      </>
+                    )}
                   </button>
                   <button
                     onClick={() => toggleBanStatus(user.id, !!user.isBanned)}

@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import { db } from './firebase';
 import { doc, onSnapshot, updateDoc, getDoc, collection, getDocs } from 'firebase/firestore';
-import { ArrowRight, Plus, Save, Trash2, Bot, MessageSquare, Image as ImageIcon, Users, Settings, Send, X } from 'lucide-react';
+import { ArrowRight, Plus, Save, Trash2, Bot, MessageSquare, Image as ImageIcon, Users, Settings, Send, X, Moon, Sun } from 'lucide-react';
 import UsersList from './UsersList';
 
 interface Rule {
@@ -25,6 +25,8 @@ export default function BotEditor() {
   const [description, setDescription] = useState('');
   const [shortDescription, setShortDescription] = useState('');
   const [maxMessages, setMaxMessages] = useState<number>(0);
+  const [botPassword, setBotPassword] = useState('');
+  const [theme, setTheme] = useState<'light' | 'dark'>(localStorage.getItem('theme') as 'light' | 'dark' || 'light');
   
   const [rules, setRules] = useState<Rule[]>([]);
   const [saving, setSaving] = useState(false);
@@ -50,6 +52,7 @@ export default function BotEditor() {
         setDescription(data.description || '');
         setShortDescription(data.shortDescription || '');
         setMaxMessages(data.maxMessages || 0);
+        setBotPassword(data.password || '');
       }
     });
 
@@ -67,6 +70,15 @@ export default function BotEditor() {
 
     return unsubscribe;
   }, [botId, user]);
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
 
   const handleAddRule = () => {
     const newRule: Rule = {
@@ -133,7 +145,8 @@ export default function BotEditor() {
           description: description,
           shortDescription: shortDescription,
           isActive: isActive,
-          maxMessages: maxMessages
+          maxMessages: maxMessages,
+          password: botPassword
         });
 
         // Update Telegram API
@@ -217,6 +230,13 @@ export default function BotEditor() {
               <span className="mr-2 text-sm text-slate-500">@{botUsername}</span>
             </div>
             <div className="flex items-center gap-4">
+              <button
+                onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+                className="p-2 text-slate-500 hover:text-slate-900 rounded-lg hover:bg-slate-100 transition-colors"
+                title={theme === 'light' ? 'الوضع الليلي' : 'الوضع النهاري'}
+              >
+                {theme === 'light' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
+              </button>
               <div className="flex items-center text-sm text-slate-600 bg-slate-100 px-3 py-1.5 rounded-lg">
                 <Users className="h-4 w-4 ml-2 text-indigo-500" />
                 <span>{userCount} مستخدم</span>
@@ -293,6 +313,18 @@ export default function BotEditor() {
                     min="0"
                     value={maxMessages}
                     onChange={(e) => setMaxMessages(parseInt(e.target.value) || 0)}
+                    className="w-full border border-slate-300 rounded-xl shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">كلمة سر البوت (قفل البوت)</label>
+                  <p className="text-xs text-slate-500 mb-2">اتركها فارغة إذا كنت لا تريد قفل البوت بكلمة سر.</p>
+                  <input
+                    type="text"
+                    value={botPassword}
+                    onChange={(e) => setBotPassword(e.target.value)}
+                    placeholder="مثال: 123456"
                     className="w-full border border-slate-300 rounded-xl shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   />
                 </div>

@@ -3,7 +3,7 @@ import { useAuth } from './AuthContext';
 import { db } from './firebase';
 import { collection, query, where, onSnapshot, doc, setDoc, getDocs, updateDoc } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
-import { Bot, Plus, LogOut, Settings, ExternalLink, Users, Play, Pause } from 'lucide-react';
+import { Bot, Plus, LogOut, Settings, ExternalLink, Users, Play, Pause, Moon, Sun } from 'lucide-react';
 
 interface BotData {
   uid: string;
@@ -22,6 +22,16 @@ export default function Dashboard() {
   const [token, setToken] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [theme, setTheme] = useState<'light' | 'dark'>(localStorage.getItem('theme') as 'light' | 'dark' || 'light');
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
 
   useEffect(() => {
     if (!user) return;
@@ -115,6 +125,13 @@ export default function Dashboard() {
             </div>
             <div className="flex items-center space-x-4 space-x-reverse">
               <span className="text-sm text-slate-600">{user?.email}</span>
+              <button
+                onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+                className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors"
+                title={theme === 'light' ? 'الوضع الليلي' : 'الوضع النهاري'}
+              >
+                {theme === 'light' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
+              </button>
               <button
                 onClick={logout}
                 className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors"

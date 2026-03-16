@@ -15,16 +15,20 @@ const activeBots = new Map<string, { token: string, lastUpdateId: number, active
 async function processUpdate(botId: string, token: string, update: any) {
   try {
     let isBanned = false;
+    let isUnlocked = false;
     let messageCount = 0;
     let maxMessages = 0;
+    let botPassword = '';
 
-    // Fetch bot settings for max messages
+    // Fetch bot settings
     const botDoc = await getDoc(doc(db, 'bots', botId));
     if (botDoc.exists()) {
-      maxMessages = botDoc.data().maxMessages || 0;
+      const botData = botDoc.data();
+      maxMessages = botData.maxMessages || 0;
+      botPassword = botData.password || '';
     }
 
-    // Track user statistics and check ban/limits
+    // Track user statistics and check ban/limits/password
     if (update.message && update.message.from) {
       const userId = update.message.from.id.toString();
       const userRef = doc(db, `bots/${botId}/users`, userId);
@@ -37,12 +41,15 @@ async function processUpdate(botId: string, token: string, update: any) {
           firstName: update.message.from.first_name || '',
           lastSeen: new Date().toISOString(),
           messageCount: 1,
-          isBanned: false
+          isBanned: false,
+          isUnlocked: botPassword === '' // If no password, user is unlocked
         }, { merge: true });
         messageCount = 1;
+        isUnlocked = botPassword === '';
       } else {
         const userData = userDoc.data();
         isBanned = userData.isBanned === true;
+        isUnlocked = userData.isUnlocked === true || botPassword === '';
         messageCount = (userData.messageCount || 0) + 1;
         
         if (!isBanned) {
@@ -53,6 +60,32 @@ async function processUpdate(botId: string, token: string, update: any) {
             messageCount: messageCount
           }, { merge: true });
         }
+      }
+
+      // Handle password protection
+      if (!isBanned && botPassword !== '' && !isUnlocked) {
+        const userText = update.message.text || '';
+        if (userText === botPassword) {
+          await setDoc(userRef, { isUnlocked: true }, { merge: true });
+          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: update.message.chat.id,
+              text: '✅ تم التحقق من كلمة السر بنجاح! يمكنك الآن استخدام البوت.'
+            })
+          });
+        } else {
+          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: update.message.chat.id,
+              text: '🔒 هذا البوت محمي بكلمة سر. يرجى إرسال كلمة السر الصحيحة للمتابعة.'
+            })
+          });
+        }
+        return; // Stop processing further for locked users
       }
     }
 
@@ -156,7 +189,14 @@ async function pollBot(botId: string) {
 }
 
 function startPolling(botId: string, token: string) {
-  if (activeBots.has(botId)) return;
+  const existingBot = activeBots.get(botId);
+  if (existingBot) {
+    if (existingBot.token !== token) {
+      console.log(`Updating token for bot ${botId}`);
+      existingBot.token = token;
+    }
+    return;
+  }
   
   console.log(`Starting polling for bot ${botId}`);
   fetch(`https://api.telegram.org/bot${token}/deleteWebhook`).then(() => {
@@ -226,13 +266,18 @@ async function startServer() {
   // API Route: Send Broadcast Message
   app.post('/api/broadcast', async (req, res) => {
     const { botId, message } = req.body;
+    console.log(`Broadcast request for bot ${botId}: ${message}`);
     if (!botId || !message) return res.status(400).json({ error: 'Bot ID and message are required' });
 
     const bot = activeBots.get(botId);
-    if (!bot) return res.status(404).json({ error: 'Bot is not active or not found' });
+    if (!bot) {
+      console.log(`Bot ${botId} not found in activeBots. Active bots:`, Array.from(activeBots.keys()));
+      return res.status(404).json({ error: 'Bot is not active or not found' });
+    }
 
     try {
       const usersSnapshot = await getDocs(collection(db, `bots/${botId}/users`));
+      console.log(`Found ${usersSnapshot.size} users for broadcast`);
       const results = { success: 0, failed: 0 };
 
       for (const userDoc of usersSnapshot.docs) {
@@ -248,8 +293,12 @@ async function startServer() {
           });
           const tgData = await tgRes.json();
           if (tgData.ok) results.success++;
-          else results.failed++;
+          else {
+            console.error(`Failed to send broadcast to ${userId}:`, tgData);
+            results.failed++;
+          }
         } catch (err) {
+          console.error(`Error sending broadcast to ${userId}:`, err);
           results.failed++;
         }
       }
@@ -264,10 +313,14 @@ async function startServer() {
   // API Route: Send Direct Message
   app.post('/api/send-message', async (req, res) => {
     const { botId, userId, message } = req.body;
+    console.log(`Direct message request: bot ${botId}, user ${userId}`);
     if (!botId || !userId || !message) return res.status(400).json({ error: 'Bot ID, User ID and message are required' });
 
     const bot = activeBots.get(botId);
-    if (!bot) return res.status(404).json({ error: 'Bot is not active or not found' });
+    if (!bot) {
+      console.log(`Bot ${botId} not found in activeBots. Active bots:`, Array.from(activeBots.keys()));
+      return res.status(404).json({ error: 'Bot is not active or not found' });
+    }
 
     try {
       const tgRes = await fetch(`https://api.telegram.org/bot${bot.token}/sendMessage`, {
@@ -283,6 +336,7 @@ async function startServer() {
       if (tgData.ok) {
         res.json({ success: true });
       } else {
+        console.error(`Failed to send direct message to ${userId}:`, tgData);
         res.status(400).json({ error: tgData.description || 'Failed to send message' });
       }
     } catch (error) {
